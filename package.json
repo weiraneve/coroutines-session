@@ -1,0 +1,27 @@
+{
+  "name": "ark-wiki",
+  "version": "1.0.0",
+  "description": "Wiki for ARK project both on [ARK-Android](https://github.com/TW-Smart-CoE/ARK-Android) and [ARK-iOS](https://github.com/TW-Smart-CoE/ARK-iOS)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "check": "textlint --preset textlint-rule-preset-zh-technical-writing \"**/*.md\"",
+    "format": "textlint --preset textlint-rule-preset-zh-technical-writing --fix \"**/*.md\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TW-Smart-CoE/ARK-WIKI.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/TW-Smart-CoE/ARK-WIKI/issues"
+  },
+  "homepage": "https://github.com/TW-Smart-CoE/ARK-WIKI#readme",
+  "dependencies": {
+    "textlint": "^12.2.1",
+    "textlint-rule-preset-zh-technical-writing": "^0.0.3"
+  }
+}
