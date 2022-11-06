@@ -234,6 +234,7 @@ private var myJob: Job? = null
 
 // 给全局协程变量赋予内容
 private fun startJob() {
+    myJob.cancel() // 每次启动全局协程之时，可能会需要取消之前的那个协程。
     myJob = viewModelScope.launch {
         delay(PLAY_HANDLE_DISAPPEAR_TIME)
         _playState.update {
