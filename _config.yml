@@ -31,6 +31,14 @@ github_username:  jekyll
 theme: just-the-docs
 plugins:
   - jekyll-feed
+  - jekyll-toc
+
+# 默认为所有文章启用 toc
+defaults:
+  - scope:
+      path: ""
+    values:
+      toc: true
 
 # Enable or disable the site search
 # Supports true (default) or false
