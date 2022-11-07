@@ -3,9 +3,10 @@ layout: default
 title: "使用"
 parent: "Coroutines"
 nav_order: 2
-toc: true
 ---
-% include toc.html html=content %
+
+* TOC
+{:toc}
 
 ## 启动一个协程
 ```kotlin
