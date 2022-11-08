@@ -31,14 +31,6 @@ github_username:  jekyll
 theme: just-the-docs
 plugins:
   - jekyll-feed
-  - jekyll-toc
-
-# 默认为所有文章启用 toc
-defaults:
-  - scope:
-      path: ""
-    values:
-      toc: true
 
 # Enable or disable the site search
 # Supports true (default) or false
@@ -69,16 +61,18 @@ search_tokenizer_separator: /[\s/]+/
 #
 # Excluded items can be processed by explicitly listing the directories or
 # their entries' file path in the `include:` list.
-#
-# exclude:
-#   - .sass-cache/
-#   - .jekyll-cache/
-#   - gemfiles/
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules/
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
-
+# languages: ["zh", "en"]
+exclude_from_localizations: ["javascript", "images", "css", "scripts", "favicon.ico"]
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - Gemfile
+  - Gemfile.lock
+  - package.json
+  - package-lock.json
+  - node_modules/
+  - scripts
+  - build-and-push-image.sh
+  - Dockerfile
+  - LICENSE.md
+  - README.md
