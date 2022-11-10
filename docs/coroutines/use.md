@@ -12,24 +12,13 @@ nav_order: 2
 ```kotlin
 override fun onCreate(savedInstanceState: Bundle?) {
     CoroutineScope(Dispatchers.Main).launch {
-        buttonCount.isEnabled = false
-        var count = 0
-        while (count < 10) {
-            delay(SECOND_DURATION)
-            count++
-            buttonCount.text = String.format(
-                Locale.getDefault(),
-                "%d",
-                count
-            )
-        }
-        buttonCount.isEnabled = true
-    }   
+        delay(SECOND_DURATION)
+    }
 }
 ```
-以上代码就是在主线程之中开启了协程，完成了一个计数器，每暂停一秒，就更新计数器上的数字。
+以上代码就是在主线程之中开启了协程，完成了一个延时的简单功能。
 
-说一下协程存在的四个基础概念：
+这里说一下协程存在的四个基础概念：
 - suspend function。即挂起函数，比如```delay()``` 就是协程库提供的一个用于实现非阻塞式延时的挂起函数。
 - CoroutineScope。即协程作用域。比如GlobalScope 是 CoroutineScope 的一个实现类，用于指定协程的作用范围，可用于管理多个协程的生命周期，所有协程都需要通过 CoroutineScope协程作用域 来启动。这个作用域一般不建议使用全局的GlobalScope作用域。
 - CoroutineContext。即协程上下文，包含多种类型的配置参数。Dispatchers.Main 就是 CoroutineContext 这个抽象概念的一种实现，用于指定协程的运行载体，用于指定协程要运行在哪类线程上。**即协程切走后，切回到哪类线程上**。Dispatchers线程调度器一般分为：
@@ -42,7 +31,7 @@ override fun onCreate(savedInstanceState: Bundle?) {
 # suspend 关键字
 
 suspend关键字是kotlin协程之中修饰挂起函数的关键字，kotlin代码中，只有挂起函数和协程能调用另一个挂起函数。**挂起，就是一个稍后会被自动切回来的线程调度操作。**
-> 这个挂起之后，切回来的动作，在 Kotlin 里就叫做 resume，恢复。
+这个挂起之后，切回来的动作，在 Kotlin 里就叫做 resume，恢复。
 
 这里拿delay挂起函数举例。```delay()``` 函数类似于 Java 中的 ```Thread.sleep()```，而之所以说 ```delay()``` 函数是非阻塞的，是因为它和单纯的线程休眠有着本质的区别。例如，当在 ThreadA 上运行的 CoroutineA 调用了delay(1000L)函数指定延迟一秒后再运行，ThreadA 会转而去执行 CoroutineB，等到一秒后再来继续执行 CoroutineA。所以，ThreadA 并不会因为 CoroutineA 的延时而阻塞，而是能继续去执行其它任务，所以挂起函数并不会阻塞其所在线程，这样就极大地提高了线程的并发灵活度，最大化了线程的利用效率。而如果是使用```Thread.sleep()```的话，线程就只能干等着而不能去执行其它任务，降低了线程的利用效率。
 
@@ -56,7 +45,9 @@ suspend fun fetchDocs() {                             // Dispatchers.Main
     show(result)                                      // Dispatchers.Main
 }
 
-suspend fun get(url: String) = withContext(Dispatchers.IO) { /* ... */ }
+suspend fun get(url: String) = withContext(Dispatchers.IO) {
+     /* ... */ 
+}
 ```
 
 在上面的示例中，```get()``` 仍在主线程上被调用，但它会在启动网络请求之前**暂停协程也就是挂起**。```get()``` 主体内通过调用 withContext(Dispatchers.IO) 创建了一个在 IO 线程池中运行的代码块，在该块内的任何代码都始终通过 IO 调度器执行。当网络请求完成后，```get()``` 会恢复已暂停的协程也**就是恢复（切回）**，使得主线程协程可以直接拿到网络请求结果而不用使用回调来通知主线程。
@@ -231,11 +222,11 @@ fun main() = runBlocking {
 }
 ```
 
-## 全局启动一个协程并取消
+## 启动一个协程成员变量并取消
 ```kotlin
 private var myJob: Job? = null
 
-// 给全局协程变量赋予内容
+// 给协程变量赋予内容
 private fun startJob() {
     myJob.cancel() // 每次启动全局协程之时，可能会需要取消之前的那个协程。
     myJob = viewModelScope.launch {
@@ -248,7 +239,7 @@ private fun startJob() {
     }
 }
 
-private fun main() {
+fun main() {
     // xxxx
     startJob() // 此处若需要协程方法则开启。
     myJob?.cancel() // 此处若不需要协程，则可以在此处取消。
@@ -260,6 +251,33 @@ private fun main() {
 - 取消它自己的子级
 - 取消它自己
 - 将异常传播并传递给它的父级
+
+## compose中启动一些协程
+让Composable支持协程的重要意义是，可以让一些简单的业务逻辑直接Composable的形式封装并实现复用，而无需额外借助ViewModel。
+
+一些api函数如下：
+
+- LaunchedEffect
+LaunchedEffect函数，可在compose的组合项内安全调用挂起函数。可以传入一个 key 值，当 key 改变时 LaunchedEffect 会重启。当compose组件重组时，对应的协程将被自动取消，并在新的协程中启动新的挂起函数。不需要像使用```DisposableEffect```调用onDispose结束生命周期和销毁操作。
+
+```kotlin
+var searchQuery by remember { mutableStateOf("") }
+LaunchedEffect(searchQuery) {
+    // execute search and receive result
+}
+```
+如上，当检索词变化时，发起检索。
+
+- rememberCoroutineScope
+rememberCoroutineScope也是让我们在compose里可以使用协程的函数api。如下，是一个简单使用例子。
+```kotlin
+val scope = rememberCoroutineScope()
+Column(modifier = Modifier.padding(16.dp)) {
+    scope.launch(Dispatchers.Main) {
+            delay(100)
+        }
+    }
+```
 
 ## Android ktx的协程
 - ViewModel ktx 库提供了一个 viewModelScope，用于在 ViewModel 中启动协程，该作用域的生命周期和 ViewModel 相等，当 ViewModel 回调了 onCleared()方法时会自动取消该协程作用域。
