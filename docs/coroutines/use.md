@@ -25,6 +25,7 @@ override fun onCreate(savedInstanceState: Bundle?) {
 1. Dispatchers.Main： 使用此调度程序可在 Android 主线程上运行协程。此调度程序只能用于与界面交互和执行快速工作。示例包括调用 suspend 函数，运行 Android 界面框架操作，以及更新 LiveData 对象。
 2. Dispatchers.IO： 此调度程序经过了专门优化，适合在主线程之外执行磁盘或网络 I/O。示例包括使用 Room 组件、从文件中读取数据或向文件中写入数据，以及运行任何网络操作
 3. Dispatchers.Default： 此调度程序经过了专门优化，适合在主线程之外执行占用大量 CPU 资源的工作。用例示例包括对列表排序和解析 JSON
+4. Dispatchers.Unconfined：对执行协程的线程不做限制，可以直接在当前调度器所在线程上执行
 
 - CoroutineBuilder。即协程构建器，协程在 CoroutineScope 的上下文中通过 launch、async 等协程构建器来进行声明并启动。launch、async 均被声明为 CoroutineScope 的扩展方法。
 
@@ -109,7 +110,9 @@ fun main() {
 [main] launchB - 2
 [main] end
 ```
-想必看出，```runBlocking``` 的一个特别之处就是：只有当内部相同作用域的所有协程都运行结束后，声明在 ```runBlocking``` 之后的代码才能执行，即 ```runBlocking``` 会阻塞其所在线程，但其内部运行的协程是非阻塞的。下面例子解释一下这个情况：
+想必看出，```runBlocking``` 的一个特别之处就是：只有当内部相同作用域的所有协程都运行结束后，声明在 ```runBlocking``` 之后的代码才能执行，即 ```runBlocking``` 会阻塞其所在线程，但其内部运行的协程是非阻塞的。这上面的例子为什么```GlobalScope.launch```开启的协程repeat的第三次没有打印出来，是因为runBlocking开启的协程lauch是阻塞线程的，但在runBlocking里开启的```GlobalScope.launch```的协程是非阻塞的，所以一旦runBlocking里开启的lauch如果被执行完，则```main```函数的线程就直接被回收结束掉了。
+
+下面例子解释一下这个情况：
 ```kotlin
 fun main() {
     GlobalScope.launch(Dispatchers.IO) {
@@ -190,6 +193,103 @@ fun main() = runBlocking {
 
 ```
 
+## Job
+Job 是协程的句柄，这里列举一些函数。
+```kotlin
+//当 Job 处于活动状态时为 true
+//如果 Job 未被取消或没有失败，则均处于 active 状态
+public val isActive: Boolean
+
+//当 Job 正常结束或者由于异常结束，均返回 true
+public val isCompleted: Boolean
+
+//用于取消 Job，可同时通过传入 Exception 来标明取消原因
+public fun cancel(cause: CancellationException? = null)
+
+//阻塞等待直到此 Job 结束运行
+public suspend fun join()
+
+//当 Job 结束运行时（不管由于什么原因）回调此方法，可用于接收可能存在的运行异常
+public fun invokeOnCompletion(handler: CompletionHandler): DisposableHandle
+
+```
+
+```kotlin
+val job = GlobalScope.launch(start = CoroutineStart.LAZY) {
+    for (i in 0..100) {
+        //每循环一次均延迟一百毫秒
+        delay(100)
+    }
+}
+job.invokeOnCompletion {
+    log("invokeOnCompletion：$it")
+}
+job.start()
+```
+
+Job还具有一些状态值，这里不一一列举。
+
+## async
+async也是一个CoroutineScope的扩展函数，和```launch```的区别主要就在于：```async```可以返回协程的执行结果，而```launch```不行。例子如下：
+
+```kotlin
+fun main() {
+    val time = measureTimeMillis {
+        runBlocking {
+            val asyncA = async {
+                delay(3000)
+                1
+            }
+            val asyncB = async {
+                delay(4000)
+                2
+            }
+            log(asyncA.await() + asyncB.await())
+        }
+    }
+    log(time)
+}
+```
+
+上面的例子中，通过```await()```方法可以拿到 async 协程的执行结果，结果如下：
+
+```
+[main] 3
+[main] 4070
+```
+
+值得一提的是，由于```launch```和```async```仅能够在```CouroutineScope```中使用，所以任何创建的协程都会被该scope追踪。Kotlin 禁止创建不能够被追踪的协程，从而避免协程泄漏。
+
+## 协程的懒加载
+
+修改上面的例子，可以发现两个协程的总耗时就会变为七秒左右。
+```kotlin
+fun main() {
+    val time = measureTimeMillis {
+        runBlocking {
+            val asyncA = async(start = CoroutineStart.LAZY) {
+                delay(3000)
+                1
+            }
+            val asyncB = async(start = CoroutineStart.LAZY) {
+                delay(4000)
+                2
+            }
+            log(asyncA.await() + asyncB.await())
+        }
+    }
+    log(time)
+}
+```
+
+```
+[main] 3
+[main] 7077
+```
+
+会造成这不同区别是因为 CoroutineStart.LAZY 不会主动启动协程，而是直到调用async.await()或者async.satrt()后才会启动（即懒加载模式），所以asyncA.await() + asyncB.await()会导致两个协程其实是在顺序执行。而默认值 CoroutineStart.DEFAULT 参数会使得协程在声明的同时就被启动了（实际上还需要等待被调度执行，但可以看做是立即就执行了），所以此时调用第一个 async.await()时两个协程其实都是处于运行状态，所以总耗时就是四秒左右。
+
+
 ## withContext
 对于以下代码，get方法内使用withContext(Dispatchers.IO) 创建了一个指定在 IO 线程池中运行的代码块，该区间内的任何代码都始终通过 IO 线程来执行。由于 withContext 方法本身就是一个挂起函数，因此 get 方法也必须定义为挂起函数。
 
@@ -228,7 +328,7 @@ private var myJob: Job? = null
 
 // 给协程变量赋予内容
 private fun startJob() {
-    myJob.cancel() // 每次启动全局协程之时，可能会需要取消之前的那个协程。
+    myJob?.cancel() // 每次启动全局协程之时，可能会需要取消之前的老协程。
     myJob = viewModelScope.launch {
         delay(PLAY_HANDLE_DISAPPEAR_TIME)
         _playState.update {
@@ -245,6 +345,7 @@ fun main() {
     myJob?.cancel() // 此处若不需要协程，则可以在此处取消。
 }
 ```
+这里值得一提的是，如果协程job被反复取消，是不会有报错异常的。
 
 ## 协程的异常处理
 当一个协程由于异常而运行失败时，它会传播这个异常并传递给它的父协程。接下来，父协程会进行下面几步操作：
